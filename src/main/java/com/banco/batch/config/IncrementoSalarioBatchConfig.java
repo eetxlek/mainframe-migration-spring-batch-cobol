@@ -56,7 +56,7 @@ public class IncrementoSalarioBatchConfig {
     public Step incrementoSalarioStep(JobRepository jobRepository,
                                       PlatformTransactionManager transactionManager) {
         return new StepBuilder("incrementoSalarioStep", jobRepository)
-                .<Empleado, Empleado>chunk(50, transactionManager)  // Procesa de 50 en 50
+                .<Empleado, Empleado>chunk(10, transactionManager)  // Procesa de 10 en 10
                 .reader(empleadoReader)
                 .processor(incrementoSalarioProcessor)
                 .writer(empleadoWriter)
