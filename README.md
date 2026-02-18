@@ -182,7 +182,7 @@ incremento-salario-batch/
 | **Contadores**         | CTR-LEIDOS-MAESTRO, CTR-LEIDOS-SUBIDAS | Variables estáticas en Processor       |
 | **Informe final**      | DISPLAY al final                       | `IncrementoSalarioListener.afterJob()` |
 | **Metadatos**          | SMF records                            | Tablas BATCH_* en H2                   |
-| **Checkpoint**         | Manual con COMMIT                      | Automático cada chunk (50 registros)   |
+| **Checkpoint**         | Manual con COMMIT                      | Automático cada chunk (10 registros)   |
 
 ---
 
@@ -221,25 +221,29 @@ COMIENZA EL PROGRAMA PB0EC319 - INCREMENTO DE SALARIOS
 ================================================================================
 HOY ES: 2025-02-15
 SON LAS: 14:30:00
+CONFIGURACION: Chunk Size = 10
 ================================================================================
 
->>> PROCESADOS: 50 empleados | ACTUALIZADOS: 12 salarios
+>>> EJECUTANDO CHUNK 1 (Registros 1-10)... [COMMIT OK]
+    → Empleado 00001: 35000.00 → 37500.00 (+2500.00) [REVISION ANUAL]
+    → Empleado 00003: 28000.00 → 31000.00 (+3000.00) [PROMOCION]
+    
+>>> EJECUTANDO CHUNK 2 (Registros 11-20)... [COMMIT OK]
+    → Empleado 00014: 42000.00 → 43500.00 (+1500.00) [REVISION ANUAL]
 
-   → Empleado 00001 (JUAN GARCIA LOPEZ): 35000.00 → 37500.00 (+2500.00) [REVISION ANUAL]
-   → Empleado 00003 (CARLOS FERNANDEZ GIL): 28000.00 → 31000.00 (+3000.00) [PROMOCION]
-   → Empleado 00004 (ANA RODRIGUEZ DIAZ): 42000.00 → 43500.00 (+1500.00) [REVISION ANUAL]
-   ...
+>>> EJECUTANDO CHUNK 3 (Registros 21-25)... [FINAL COMMIT OK]
 
 ================================================================================
-*** EJECUCION OK ***
+*** EJECUCION FINALIZADA CON EXITO ***
 
 ESTADISTICAS DE EJECUCION:
 --------------------------------------------------------------------------------
-LEIDOS MAESTRO                                          25
-LEIDOS SUBIDAS                                          13
-GRABADOS                                                25
+LEIDOS MAESTRO (TOTAL)                                  25
+LEIDOS SUBIDAS (TOTAL)                                  13
+GRABADOS EN FICHERO SALIDA                              25
 SALARIOS ACTUALIZADOS                                   12
-EMPLEADOS SIN SUBIDA                                    13
+EMPLEADOS SIN CAMBIOS                                   13
+COMMITS REALIZADOS (CHUNKS)                              3
 
 VALIDACIONES:
 --------------------------------------------------------------------------------
@@ -301,7 +305,7 @@ public FlatFileItemWriter<Empleado> empleadoWriter() {
 
 ### 4. Chunk processing
 ```java
-.<Empleado, Empleado>chunk(50, transactionManager)
+.<Empleado, Empleado>chunk(10, transactionManager)
 ```
 
 **Equivalente COBOL:**
@@ -315,7 +319,7 @@ PERFORM 2000-CRUCE
 **Ventajas:**
 - ✅ Gestión automática de transacciones
 - ✅ Si falla en el registro 120, puede retomar desde el registro 100 (último chunk)
-- ✅ Memoria controlada (solo 50 registros en memoria a la vez)
+- ✅ Memoria controlada (solo 10 registros en memoria a la vez)
 
 ---
 
@@ -336,19 +340,14 @@ PERFORM 2000-CRUCE
 
 ---
 
-## 🧪 Testing
+## 🧪 Validación Funcional flujo E2E
 
 ### Casos de prueba incluidos:
 
-1. **Empleado con subida** → Salario se incrementa
-2. **Empleado sin subida** → Registro se mantiene igual
-3. **Subida sin empleado** (código 00099) → Se detecta inconsistencia
-4. **Validación de contadores** → LEIDOS = GRABADOS
-
-### Para ejecutar tests:
-```bash
-mvn test
-```
+1. **Match Positivo**  Empleado con subida asignada → Salario se incrementa en csv de salida
+2. **Sin Cambios** Empleado sin subida → Registro se mantiene igual en el csv de salida
+3. **Inconsistencia Detectada** Código 00099 no existe en maestro → Se detecta inconsistencia y reporta
+4. **Validación de contadores** → LEIDOS = GRABADOS , no hay pérdida de información
 
 ---
 
@@ -391,10 +390,8 @@ SELECT * FROM BATCH_JOB_EXECUTION_PARAMS;
 
 **Respuesta:**
 
-> Migrar el proceso PB0EC319 que hace un cruce de ficheros 
-> para incrementar salarios de empleados. El proceso original en COBOL leía 
-> dos ficheros secuenciales y hacía un matching 1:1.
-> 
+> El proceso PB0EC319 hace un cruce de ficheros para incrementar salarios de empleados. 
+> El proceso original en COBOL lee dos ficheros secuenciales y hace un matching 1:1.
 > Se migra a Spring Batch siguiendo esta estrategia:
 > 
 > 1. **Análisis del COBOL**: Identificar que es un proceso Reader-Processor-Writer 
